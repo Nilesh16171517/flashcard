@@ -1,0 +1,1 @@
+export const id=(prefix='id')=>`${prefix}_${crypto.randomUUID()}`;export const now=()=>Date.now();
