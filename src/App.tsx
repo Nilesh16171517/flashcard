@@ -8,7 +8,7 @@ type Point={x:number;y:number};
 type Annotation={id:string;imageId:string;type:'text'|'pen'|'image';x:number;y:number;w:number;h:number;text?:string;points?:Point[];blob?:Blob;color?:string;fontFamily?:string;fontSize?:number;fontWeight?:string;fontStyle?:string;textDecoration?:string;penWidth?:number;penStyle?:'solid'|'dashed'|'dotted'};
 
 const DB_PREFIX='recallforge-v1',V=3;let dbp:Promise<IDBDatabase>|null=null;let dbKey='';
-function activeDbName(){const uid=localStorage.getItem('rf-active-user');return uid?\`${DB_PREFIX}-\${uid}\`:DB_PREFIX}
+function activeDbName(){const uid=localStorage.getItem('rf-active-user');return uid?`${DB_PREFIX}-${uid}`:DB_PREFIX}
 function db(){const key=activeDbName();if(dbp&&dbKey===key)return dbp;if(dbp){dbp.then(d=>d.close()).catch(()=>{});dbp=null}dbKey=key;dbp=new Promise((res,rej)=>{const r=indexedDB.open(key,V);r.onupgradeneeded=()=>{const d=r.result;for(const n of['images','regions','cards','annotations','folders'])if(!d.objectStoreNames.contains(n))d.createObjectStore(n,{keyPath:'id'});};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});return dbp}
 async function all<T>(s:string){const d=await db(),t=d.transaction(s,'readonly').objectStore(s);return new Promise<T[]>((res,rej)=>{const r=t.getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 async function put(s:string,v:any){const d=await db();return new Promise<void>((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).put(v);r.onsuccess=()=>{res();window.dispatchEvent(new Event('recallforge-data-changed'))};r.onerror=()=>rej(r.error)})}
