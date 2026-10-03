@@ -78,8 +78,9 @@ async function writeBackup(content:string){
   }
   db.close();
 }
-export async function connectDrive(accessToken:string){const folderId=await ensureFolder(accessToken);const backupFileId=await findBackup(accessToken,folderId);state={accessToken,folderId,backupFileId};localStorage.setItem('rf-drive-connected','1');return{folderId,backupFileId};}
+export async function connectDrive(accessToken:string){const folderId=await ensureFolder(accessToken);const backupFileId=await findBackup(accessToken,folderId);state={accessToken,folderId,backupFileId};localStorage.setItem('rf-drive-connected','1');localStorage.setItem('rf-drive-token',accessToken);localStorage.setItem('rf-drive-token-time',String(Date.now()));return{folderId,backupFileId};}
+export function getCachedDriveToken(){const token=localStorage.getItem('rf-drive-token');const issued=Number(localStorage.getItem('rf-drive-token-time')||0);return token&&issued&&Date.now()-issued<50*60*1000?token:null;}
 export async function restoreFromDriveIfEmpty(){if(!state?.backupFileId||await localHasData())return false;const response=await fetch(`${DRIVE_API}/files/${state.backupFileId}?alt=media`,{headers:authHeaders(state.accessToken)});if(!response.ok)return false;await writeBackup(await response.text());return true;}
-export function disconnectDrive(){state=null;localStorage.removeItem('rf-drive-connected');localStorage.removeItem('rf-drive-folder');}
+export function disconnectDrive(){state=null;localStorage.removeItem('rf-drive-connected');localStorage.removeItem('rf-drive-folder');localStorage.removeItem('rf-drive-token');localStorage.removeItem('rf-drive-token-time');}
 export function isDriveConnected(){return!!state;}
 export async function syncToDrive(){if(!state)return;const content=await makeBackup();state.backupFileId=await uploadOrUpdate(state.accessToken,state.folderId,state.backupFileId,content);}
