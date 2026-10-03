@@ -1,5 +1,5 @@
 import React,{useEffect,useState}from'react';
-import{createUserWithEmailAndPassword,GoogleAuthProvider,linkWithPopup,onAuthStateChanged,reauthenticateWithPopup,sendPasswordResetEmail,signInWithEmailAndPassword,signInWithPopup,signOut,updateProfile,type User}from'firebase/auth';
+import{createUserWithEmailAndPassword,GoogleAuthProvider,linkWithPopup,onAuthStateChanged,reauthenticateWithPopup,sendPasswordResetEmail,signInWithEmailAndPassword,signInWithPopup,signOut,unlink,updateProfile,type User}from'firebase/auth';
 import{auth,firebaseConfigured}from'./firebase';import{connectDrive,disconnectDrive,restoreFromDriveIfEmpty,syncToDrive}from'./drive';
 
 type Mode='signin'|'signup'|'forgot';
@@ -10,7 +10,7 @@ async function copyStore(source:IDBDatabase,target:IDBDatabase,name:string){retu
 async function migrateLegacyData(uid:string){const flag=`rf-migrated-${uid}`;if(localStorage.getItem(flag))return;const source=await openDb('recallforge-v1');const target=await openDb(`recallforge-v1-${uid}`);for(const n of['images','regions','cards','annotations','folders'])await copyStore(source,target,n);source.close();target.close();localStorage.setItem(flag,'1');}
 
 function provider(){const p=new GoogleAuthProvider();p.addScope('https://www.googleapis.com/auth/drive.file');p.setCustomParameters({prompt:'consent'});return p;}
-async function connectForUser(user:User){const p=provider();const result=user.providerData.some(x=>x.providerId==='google.com')?await reauthenticateWithPopup(user,p):await linkWithPopup(user,p);const credential=GoogleAuthProvider.credentialFromResult(result);const token=credential?.accessToken;const googleEmail=result.user.email?.toLowerCase();if(!token)throw new Error('Google did not return Drive authorization.');if(googleEmail&&user.email&&googleEmail!==user.email.toLowerCase())throw new Error('Choose the same Google account as your RecallForge email.');await connectDrive(token);await restoreFromDriveIfEmpty();await syncToDrive();}
+async function connectForUser(user:User){const p=provider();const result=user.providerData.some(x=>x.providerId==='google.com')?await reauthenticateWithPopup(user,p):await linkWithPopup(user,p);const credential=GoogleAuthProvider.credentialFromResult(result);const token=credential?.accessToken;const googleEmail=result.user.email?.toLowerCase();if(!token)throw new Error('Google did not return Drive authorization.');if(googleEmail&&user.email&&googleEmail!==user.email.toLowerCase()){if(result.user.providerData.some(x=>x.providerId==='google.com'))await unlink(user,'google.com');throw new Error('Choose the same Google account as your RecallForge email.');}await connectDrive(token);await restoreFromDriveIfEmpty();await syncToDrive();}
 
 function AuthShell({children}:{children:React.ReactNode}){
  const[mode,setMode]=useState<Mode>('signin'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[user,setUser]=useState<User|null>(null),[driveReady,setDriveReady]=useState(false),[driveBusy,setDriveBusy]=useState(false);
