@@ -1,0 +1,11 @@
+export type CardType='basic'|'reversed'|'typed'|'image-occlusion';export type CardState='new'|'learning'|'review'|'relearning'|'suspended'|'buried';export type Rating=1|2|3|4;export type Shape='rect'|'polygon';
+export interface Deck{id:string;name:string;parentId:string|null;settings:DeckSettings;createdAt:number;updatedAt:number}
+export interface DeckSettings{newPerDay:number;reviewsPerDay:number;learningSteps:number[];graduatingInterval:number;easyInterval:number;maxInterval:number}
+export interface Note{id:string;type:CardType;sourceImageId?:string;fields:{front:string;back:string;extra?:string};tags:string[];createdAt:number;updatedAt:number}
+export interface ImageAsset{id:string;blob:Blob;width:number;height:number;name:string;createdAt:number}
+export interface Occlusion{id:string;imageId:string;shape:Shape;coordinates:{x:number;y:number;width:number;height:number};polygon?:{x:number;y:number}[];label?:string;color?:string;createdAt:number;updatedAt:number}
+export interface SchedulingData{state:CardState;due:number;interval:number;ease:number;reps:number;lapses:number;learningStep:number;stability:number}
+export interface Card{id:string;noteId:string;deckId:string;cardType:CardType;occlusionIds:string[];schedulingData:SchedulingData;flags:string[];suspended:boolean;buriedUntil?:number;createdAt:number;updatedAt:number}
+export interface Review{id:string;cardId:string;timestamp:number;rating:Rating;previousState:CardState;newState:CardState;previousInterval:number;newInterval:number;previousEase:number;newEase:number}
+export interface AppSettings{scheduler:'sm2';theme:'light'|'dark'|'system';maskStyle:'solid'|'pattern'|'question'|'blur';maskColor:string;revealMode:'selected'|'all'|'sequential'|'toggle';backupReminderDays:number}
+export interface ExportBundle{version:1;exportedAt:number;decks:Deck[];notes:Note[];images:{id:string;name:string;width:number;height:number;createdAt:number;data:string}[];occlusions:Occlusion[];cards:Card[];reviews:Review[];settings:AppSettings}
