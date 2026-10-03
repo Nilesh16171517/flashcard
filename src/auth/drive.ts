@@ -42,7 +42,28 @@ async function uploadOrUpdate(token:string,folderId:string,backupId:string|undef
   if(!response.ok)throw new Error('Google Drive rejected the RecallForge backup.');
   return (await response.json()).id as string;
 }
+async function localHasData(){
+  for(const store of ['images','regions','cards','annotations','folders']) if((await readAll(store)).length) return true;
+  return false;
+}
+function dataUrlToBlob(data:string,type:string){const [meta,raw]=data.split(',');const bytes=atob(raw);const arr=new Uint8Array(bytes.length);for(let i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);return new Blob([arr],{type:type||meta.match(/data:([^;]+)/)?.[1]||'application/octet-stream'});}
+async function deserialise(value:any):Promise<any>{
+  if(value&&value.__blob)return dataUrlToBlob(value.data,value.type);
+  if(Array.isArray(value))return Promise.all(value.map(deserialise));
+  if(value&&typeof value==='object'){const out:any={};for(const[k,v]of Object.entries(value))out[k]=await deserialise(v);return out;}
+  return value;
+}
+async function writeBackup(content:string){
+  const parsed=JSON.parse(content);if(parsed?.format!=='recallforge-backup'||!parsed.data)throw new Error('The RecallForge Drive backup is invalid.');
+  const db=await openDb();
+  for(const store of ['images','regions','cards','annotations','folders']){
+    const tx=db.transaction(store,'readwrite');tx.objectStore(store).clear();await new Promise<void>((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});
+    const tx2=db.transaction(store,'readwrite');for(const item of parsed.data[store]||[])tx2.objectStore(store).put(await deserialise(item));await new Promise<void>((resolve,reject)=>{tx2.oncomplete=()=>resolve();tx2.onerror=()=>reject(tx2.error)});
+  }
+  db.close();
+}
 export async function connectDrive(accessToken:string){const folderId=await ensureFolder(accessToken);const backupFileId=await findBackup(accessToken,folderId);state={accessToken,folderId,backupFileId};localStorage.setItem('rf-drive-connected','1');return{folderId,backupFileId};}
+export async function restoreFromDriveIfEmpty(){if(!state?.backupFileId||await localHasData())return false;const response=await fetch(`${DRIVE_API}/files/${state.backupFileId}?alt=media`,{headers:authHeaders(state.accessToken)});if(!response.ok)return false;await writeBackup(await response.text());return true;}
 export function disconnectDrive(){state=null;localStorage.removeItem('rf-drive-connected');localStorage.removeItem('rf-drive-folder');}
 export function isDriveConnected(){return!!state;}
 export async function syncToDrive(){if(!state)return;const content=await makeBackup();state.backupFileId=await uploadOrUpdate(state.accessToken,state.folderId,state.backupFileId,content);}
