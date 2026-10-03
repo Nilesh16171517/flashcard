@@ -1,7 +1,7 @@
 import{initializeApp}from'firebase/app';import{getAuth,type Auth}from'firebase/auth';
 
 const config={
- apiKey:import.meta.env.VITE_FIREBASE_API_KEY||'AIzaSyA8HHyNbX7zlp0o4fkzzTmlKaInggZPs8',
+ apiKey:import.meta.env.VITE_FIREBASE_API_KEY||'AIzaSyA8HHyNbX7zlpOof4kzzZtmlKaInggZPs8',
  authDomain:import.meta.env.VITE_FIREBASE_AUTH_DOMAIN||'recallforge-390ab.firebaseapp.com',
  projectId:import.meta.env.VITE_FIREBASE_PROJECT_ID||'recallforge-390ab',
  storageBucket:import.meta.env.VITE_FIREBASE_STORAGE_BUCKET||'recallforge-390ab.firebasestorage.app',
