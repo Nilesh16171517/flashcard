@@ -39,7 +39,7 @@ async function uploadOrUpdate(token:string,folderId:string,backupId:string|undef
   const body=[`--${boundary}`,'Content-Type: application/json; charset=UTF-8','',JSON.stringify(metadata),`--${boundary}`,'Content-Type: application/json','',content,`--${boundary}--`,''].join('\r\n');
   const url=backupId?`${DRIVE_API}/files/${backupId}?uploadType=multipart&fields=id,name,modifiedTime`:`${DRIVE_API}/files?uploadType=multipart&fields=id,name,modifiedTime`;
   const response=await fetch(url,{method:backupId?'PATCH':'POST',headers:{...authHeaders(token),'Content-Type':`multipart/related; boundary=${boundary}`},body});
-  if(!response.ok)throw new Error('Google Drive rejected the RecallForge backup.');
+  if(!response.ok){let detail='';try{detail=await response.text()}catch{} throw new Error(`Google Drive rejected the RecallForge backup (${response.status}). ${detail||'Check Google Drive API and authorization.'}`);}
   return (await response.json()).id as string;
 }
 async function localHasData(){
