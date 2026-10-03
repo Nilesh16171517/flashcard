@@ -34,13 +34,29 @@ async function ensureFolder(token:string){
 }
 async function findBackup(token:string,folderId:string){const q=encodeURIComponent(`'${folderId}' in parents and name='recallforge-data.json' and trashed=false`);const response=await fetch(`${DRIVE_API}/files?q=${q}&spaces=drive&fields=files(id,name)&pageSize=10`,{headers:authHeaders(token)});if(!response.ok)return undefined;const result=await response.json();return result.files?.[0]?.id;}
 async function uploadOrUpdate(token:string,folderId:string,backupId:string|undefined,content:string){
-  const metadata={name:'recallforge-data.json',mimeType:'application/json',...(backupId?{}:{parents:[folderId]})};
-  const boundary='recallforge_boundary_'+Math.random().toString(36).slice(2);
-  const body=[`--${boundary}`,'Content-Type: application/json; charset=UTF-8','',JSON.stringify(metadata),`--${boundary}`,'Content-Type: application/json','',content,`--${boundary}--`,''].join('\r\n');
-  const url=backupId?`${DRIVE_API}/files/${backupId}?uploadType=multipart&fields=id,name,modifiedTime`:`${DRIVE_API}/files?uploadType=multipart&fields=id,name,modifiedTime`;
-  const response=await fetch(url,{method:backupId?'PATCH':'POST',headers:{...authHeaders(token),'Content-Type':`multipart/related; boundary=${boundary}`},body});
-  if(!response.ok){let detail='';try{detail=await response.text()}catch{} throw new Error(`Google Drive rejected the RecallForge backup (${response.status}). ${detail||'Check Google Drive API and authorization.'}`);}
-  return (await response.json()).id as string;
+  let fileId=backupId;
+  if(!fileId){
+    const createResponse=await fetch(`${DRIVE_API}/files?fields=id,name,modifiedTime`,{
+      method:'POST',
+      headers:{...authHeaders(token),'Content-Type':'application/json'},
+      body:JSON.stringify({name:'recallforge-data.json',mimeType:'application/json',parents:[folderId]})
+    });
+    if(!createResponse.ok){
+      let detail='';try{detail=await createResponse.text()}catch{}
+      throw new Error(`Google Drive could not create the RecallForge backup (${createResponse.status}). ${detail||'Check Google Drive authorization.'}`);
+    }
+    fileId=(await createResponse.json()).id as string;
+  }
+  const uploadResponse=await fetch(`${DRIVE_API}/files/${fileId}?uploadType=media&fields=id,name,modifiedTime`,{
+    method:'PATCH',
+    headers:{...authHeaders(token),'Content-Type':'application/json'},
+    body:content
+  });
+  if(!uploadResponse.ok){
+    let detail='';try{detail=await uploadResponse.text()}catch{}
+    throw new Error(`Google Drive rejected the RecallForge backup (${uploadResponse.status}). ${detail||'Check Google Drive authorization.'}`);
+  }
+  return (await uploadResponse.json()).id as string;
 }
 async function localHasData(){
   for(const store of ['images','regions','cards','annotations','folders']) if((await readAll(store)).length) return true;
