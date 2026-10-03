@@ -1,0 +1,1 @@
+export function fileToDataUrl(file:File):Promise<string>{return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result));r.onerror=rej;r.readAsDataURL(file);});}export function loadImage(src:string):Promise<HTMLImageElement>{return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src;});}
