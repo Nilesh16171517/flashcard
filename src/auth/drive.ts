@@ -1,0 +1,48 @@
+const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+
+type DriveState = { accessToken: string; folderId: string; backupFileId?: string };
+let state: DriveState | null = null;
+
+function authHeaders(token: string) { return { Authorization: `Bearer ${token}` }; }
+function dbName() { const uid = localStorage.getItem('rf-active-user'); return uid ? `recallforge-v1-${uid}` : 'recallforge-v1'; }
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(dbName(), 3);
+    request.onupgradeneeded = () => { const db=request.result; for (const name of ['images','regions','cards','annotations','folders']) if(!db.objectStoreNames.contains(name)) db.createObjectStore(name,{keyPath:'id'}); };
+    request.onsuccess=()=>resolve(request.result); request.onerror=()=>reject(request.error);
+  });
+}
+async function readAll(store:string):Promise<any[]> { const db=await openDb(); return new Promise((resolve,reject)=>{const r=db.transaction(store,'readonly').objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)}); }
+function blobToDataUrl(blob:Blob):Promise<string>{return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=()=>reject(r.error);r.readAsDataURL(blob)})}
+async function serialise(value:any):Promise<any>{
+  if(value instanceof Blob)return{__blob:true,type:value.type,data:await blobToDataUrl(value)};
+  if(Array.isArray(value))return Promise.all(value.map(serialise));
+  if(value&&typeof value==='object'){const out:any={};for(const[k,v]of Object.entries(value))out[k]=await serialise(v);return out;}
+  return value;
+}
+async function makeBackup(){const data:any={};for(const store of ['images','regions','cards','annotations','folders'])data[store]=await Promise.all((await readAll(store)).map(serialise));return JSON.stringify({format:'recallforge-backup',version:1,exportedAt:new Date().toISOString(),data});}
+async function ensureFolder(token:string){
+  const cached=localStorage.getItem('rf-drive-folder');if(cached)return cached;
+  const q=encodeURIComponent("name='RecallForge' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+  const existing=await fetch(`${DRIVE_API}/files?q=${q}&spaces=drive&fields=files(id,name)&pageSize=10`,{headers:authHeaders(token)});
+  if(!existing.ok)throw new Error('Google Drive could not be accessed.');
+  const result=await existing.json();const found=result.files?.[0]?.id;if(found){localStorage.setItem('rf-drive-folder',found);return found;}
+  const response=await fetch(`${DRIVE_API}/files?fields=id,name`,{method:'POST',headers:{...authHeaders(token),'Content-Type':'application/json'},body:JSON.stringify({name:'RecallForge',mimeType:'application/vnd.google-apps.folder'})});
+  if(!response.ok)throw new Error('Could not create the RecallForge folder in Google Drive.');
+  const folder=await response.json();localStorage.setItem('rf-drive-folder',folder.id);return folder.id;
+}
+async function findBackup(token:string,folderId:string){const q=encodeURIComponent(`'${folderId}' in parents and name='recallforge-data.json' and trashed=false`);const response=await fetch(`${DRIVE_API}/files?q=${q}&spaces=drive&fields=files(id,name)&pageSize=10`,{headers:authHeaders(token)});if(!response.ok)return undefined;const result=await response.json();return result.files?.[0]?.id;}
+async function uploadOrUpdate(token:string,folderId:string,backupId:string|undefined,content:string){
+  const metadata={name:'recallforge-data.json',mimeType:'application/json',...(backupId?{}:{parents:[folderId]})};
+  const boundary='recallforge_boundary_'+Math.random().toString(36).slice(2);
+  const body=[`--${boundary}`,'Content-Type: application/json; charset=UTF-8','',JSON.stringify(metadata),`--${boundary}`,'Content-Type: application/json','',content,`--${boundary}--`,''].join('\r\n');
+  const url=backupId?`${DRIVE_API}/files/${backupId}?uploadType=multipart&fields=id,name,modifiedTime`:`${DRIVE_API}/files?uploadType=multipart&fields=id,name,modifiedTime`;
+  const response=await fetch(url,{method:backupId?'PATCH':'POST',headers:{...authHeaders(token),'Content-Type':`multipart/related; boundary=${boundary}`},body});
+  if(!response.ok)throw new Error('Google Drive rejected the RecallForge backup.');
+  return (await response.json()).id as string;
+}
+export async function connectDrive(accessToken:string){const folderId=await ensureFolder(accessToken);const backupFileId=await findBackup(accessToken,folderId);state={accessToken,folderId,backupFileId};localStorage.setItem('rf-drive-connected','1');return{folderId,backupFileId};}
+export function disconnectDrive(){state=null;localStorage.removeItem('rf-drive-connected');localStorage.removeItem('rf-drive-folder');}
+export function isDriveConnected(){return!!state;}
+export async function syncToDrive(){if(!state)return;const content=await makeBackup();state.backupFileId=await uploadOrUpdate(state.accessToken,state.folderId,state.backupFileId,content);}
