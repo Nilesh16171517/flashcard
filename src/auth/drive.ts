@@ -47,7 +47,7 @@ async function uploadOrUpdate(token:string,folderId:string,backupId:string|undef
     }
     fileId=(await createResponse.json()).id as string;
   }
-  const uploadResponse=await fetch(`${DRIVE_API}/files/${fileId}?uploadType=media&fields=id,name,modifiedTime`,{
+  const uploadResponse=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&fields=id,name,modifiedTime`,{
     method:'PATCH',
     headers:{...authHeaders(token),'Content-Type':'application/json'},
     body:content
